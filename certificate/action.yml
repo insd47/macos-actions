@@ -1,0 +1,29 @@
+name: Import Apple Code-Signing Certificate
+description: Import one Apple code-signing identity into an isolated temporary keychain.
+author: insd47
+
+inputs:
+  apple-certificate:
+    description: A base64-encoded PKCS12 certificate and private key.
+    required: true
+  apple-certificate-password:
+    description: The password for the PKCS12 certificate.
+    required: true
+
+outputs:
+  identity:
+    description: The SHA-1 hash of the imported code-signing identity.
+  identity-name:
+    description: The certificate Common Name of the imported code-signing identity.
+  cert-info:
+    description: The full security find-identity line for the imported identity.
+
+runs:
+  using: node24
+  main: dist/index.js
+  post: dist/post/index.js
+  post-if: always()
+
+branding:
+  color: blue
+  icon: package

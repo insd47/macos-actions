@@ -1,0 +1,142 @@
+name: Sign and Notarize macOS App
+description: Sign, notarize, and staple a macOS app after a certificate has been imported.
+author: insd47
+
+inputs:
+  app-path:
+    description: Path to the .app bundle.
+    required: true
+  identity:
+    description: SHA-1 hash or full Common Name of the imported code-signing identity.
+    required: true
+  entitlements-path:
+    description: Optional entitlements plist applied while signing.
+    required: false
+
+outputs:
+  app-path:
+    description: Absolute path to the signed, notarized, and stapled app.
+    value: ${{ steps.paths.outputs.app-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve app paths
+      id: paths
+      shell: bash
+      env:
+        MACOS_ACTIONS_APP_PATH: ${{ inputs.app-path }}
+        MACOS_ACTIONS_ENTITLEMENTS_PATH: ${{ inputs.entitlements-path }}
+      run: |
+        set -euo pipefail
+
+        if [[ "$(uname -s)" != "Darwin" ]]; then
+          echo '::error::The sign action requires a macOS runner.'
+          exit 1
+        fi
+
+        if [[ ! -d "$MACOS_ACTIONS_APP_PATH" ]]; then
+          echo "::error::app-path is not a directory: $MACOS_ACTIONS_APP_PATH"
+          exit 1
+        fi
+
+        if [[ "$MACOS_ACTIONS_APP_PATH" != *.app ]]; then
+          echo "::error::app-path must point to a .app bundle: $MACOS_ACTIONS_APP_PATH"
+          exit 1
+        fi
+
+        app_path="$(cd "$MACOS_ACTIONS_APP_PATH" && pwd -P)"
+        entitlements_path=""
+
+        if [[ -n "$MACOS_ACTIONS_ENTITLEMENTS_PATH" ]]; then
+          if [[ ! -f "$MACOS_ACTIONS_ENTITLEMENTS_PATH" ]]; then
+            echo "::error::entitlements-path is not a file: $MACOS_ACTIONS_ENTITLEMENTS_PATH"
+            exit 1
+          fi
+
+          entitlements_directory="$(cd "$(dirname "$MACOS_ACTIONS_ENTITLEMENTS_PATH")" && pwd -P)"
+          entitlements_path="$entitlements_directory/$(basename "$MACOS_ACTIONS_ENTITLEMENTS_PATH")"
+        fi
+
+        echo "app-path=$app_path" >>"$GITHUB_OUTPUT"
+        echo "entitlements-path=$entitlements_path" >>"$GITHUB_OUTPUT"
+
+    - name: Sign app
+      shell: bash
+      env:
+        MACOS_ACTIONS_APP_PATH: ${{ steps.paths.outputs.app-path }}
+        MACOS_ACTIONS_ENTITLEMENTS_PATH: ${{ steps.paths.outputs.entitlements-path }}
+        MACOS_ACTIONS_SIGNING_IDENTITY: ${{ inputs.identity }}
+      run: |
+        set -euo pipefail
+
+        : "${MACOS_ACTIONS_SIGNING_IDENTITY:?identity input is required.}"
+
+        codesign_args=(
+          --deep
+          --force
+          --options runtime
+          --timestamp
+          --sign "$MACOS_ACTIONS_SIGNING_IDENTITY"
+        )
+
+        if [[ -n "$MACOS_ACTIONS_ENTITLEMENTS_PATH" ]]; then
+          codesign_args+=(--entitlements "$MACOS_ACTIONS_ENTITLEMENTS_PATH")
+        fi
+
+        codesign_args+=("$MACOS_ACTIONS_APP_PATH")
+
+        echo "Signing $MACOS_ACTIONS_APP_PATH."
+        /usr/bin/codesign "${codesign_args[@]}"
+        /usr/bin/codesign --verify --deep --strict --verbose=2 "$MACOS_ACTIONS_APP_PATH"
+
+    - name: Notarize app
+      shell: bash
+      env:
+        MACOS_ACTIONS_APP_PATH: ${{ steps.paths.outputs.app-path }}
+      run: |
+        set -euo pipefail
+
+        : "${APPLE_ID:?APPLE_ID environment variable is required.}"
+        : "${APPLE_TEAM_ID:?APPLE_TEAM_ID environment variable is required.}"
+        : "${APPLE_PASSWORD:?APPLE_PASSWORD environment variable is required and must contain an app-specific password.}"
+
+        temporary_root="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+        work_directory="$(/usr/bin/mktemp -d "$temporary_root/macos-sign.XXXXXX")"
+        trap '/bin/rm -rf -- "$work_directory"' EXIT
+        archive_path="$work_directory/notarization.zip"
+        result_path="$work_directory/notarization.json"
+
+        echo "Submitting $MACOS_ACTIONS_APP_PATH to the Apple notary service."
+        /usr/bin/ditto -c -k --keepParent "$MACOS_ACTIONS_APP_PATH" "$archive_path"
+        /usr/bin/xcrun notarytool submit "$archive_path" \
+          --apple-id "$APPLE_ID" \
+          --team-id "$APPLE_TEAM_ID" \
+          --password "$APPLE_PASSWORD" \
+          --wait \
+          --output-format json |
+          /usr/bin/tee "$result_path"
+
+        status="$(/usr/bin/plutil -extract status raw -o - "$result_path")"
+
+        if [[ "$status" != "Accepted" ]]; then
+          echo "::error::Apple notarization finished with status '$status'."
+          exit 1
+        fi
+
+    - name: Staple and validate app
+      shell: bash
+      env:
+        MACOS_ACTIONS_APP_PATH: ${{ steps.paths.outputs.app-path }}
+      run: |
+        set -euo pipefail
+
+        echo "Stapling the notarization ticket to $MACOS_ACTIONS_APP_PATH."
+        /usr/bin/xcrun stapler staple "$MACOS_ACTIONS_APP_PATH"
+        /usr/bin/xcrun stapler validate "$MACOS_ACTIONS_APP_PATH"
+        /usr/sbin/spctl --assess --type execute --verbose=4 "$MACOS_ACTIONS_APP_PATH"
+        echo "Signed, notarized, and stapled $MACOS_ACTIONS_APP_PATH."
+
+branding:
+  color: blue
+  icon: shield

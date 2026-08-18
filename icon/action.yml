@@ -1,0 +1,88 @@
+name: macOS App Icon
+description: Replace the icon declared by a macOS app bundle.
+author: insd47
+
+inputs:
+  app-path:
+    description: Path to the .app bundle.
+    required: true
+  icon-path:
+    description: Path to the replacement .icns file.
+    required: true
+
+outputs:
+  icon-path:
+    description: Absolute path to the icon installed in the app bundle.
+    value: ${{ steps.paths.outputs.icon-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve icon paths
+      id: paths
+      shell: bash
+      env:
+        MACOS_ACTIONS_APP_PATH: ${{ inputs.app-path }}
+        MACOS_ACTIONS_ICON_PATH: ${{ inputs.icon-path }}
+      run: |
+        set -euo pipefail
+
+        if [[ "$(uname -s)" != "Darwin" ]]; then
+          echo '::error::The icon action requires a macOS runner.'
+          exit 1
+        fi
+
+        if [[ ! -d "$MACOS_ACTIONS_APP_PATH" ]]; then
+          echo "::error::app-path is not a directory: $MACOS_ACTIONS_APP_PATH"
+          exit 1
+        fi
+
+        if [[ ! -f "$MACOS_ACTIONS_ICON_PATH" ]]; then
+          echo "::error::icon-path is not a file: $MACOS_ACTIONS_ICON_PATH"
+          exit 1
+        fi
+
+        if [[ "$MACOS_ACTIONS_ICON_PATH" != *.icns ]]; then
+          echo "::error::icon-path must point to an .icns file: $MACOS_ACTIONS_ICON_PATH"
+          exit 1
+        fi
+
+        app_path="$(cd "$MACOS_ACTIONS_APP_PATH" && pwd -P)"
+        icon_directory="$(cd "$(dirname "$MACOS_ACTIONS_ICON_PATH")" && pwd -P)"
+        icon_path="$icon_directory/$(basename "$MACOS_ACTIONS_ICON_PATH")"
+        info_path="$app_path/Contents/Info.plist"
+        icon_name="$(/usr/bin/plutil -extract CFBundleIconFile raw -o - "$info_path")"
+
+        if [[ -z "$icon_name" ]]; then
+          echo '::error::CFBundleIconFile is empty.'
+          exit 1
+        fi
+
+        if [[ "$icon_name" == */* || "$icon_name" == *\\* ]]; then
+          echo "::error::CFBundleIconFile must be a file name, received: $icon_name"
+          exit 1
+        fi
+
+        if [[ "$icon_name" != *.icns ]]; then
+          icon_name="$icon_name.icns"
+        fi
+
+        destination_path="$app_path/Contents/Resources/$icon_name"
+
+        echo "source-path=$icon_path" >>"$GITHUB_OUTPUT"
+        echo "icon-path=$destination_path" >>"$GITHUB_OUTPUT"
+
+    - name: Replace app icon
+      shell: bash
+      env:
+        MACOS_ACTIONS_SOURCE_PATH: ${{ steps.paths.outputs.source-path }}
+        MACOS_ACTIONS_ICON_PATH: ${{ steps.paths.outputs.icon-path }}
+      run: |
+        set -euo pipefail
+
+        /bin/cp -f "$MACOS_ACTIONS_SOURCE_PATH" "$MACOS_ACTIONS_ICON_PATH"
+        echo "Installed $MACOS_ACTIONS_SOURCE_PATH as $MACOS_ACTIONS_ICON_PATH."
+
+branding:
+  color: blue
+  icon: image
