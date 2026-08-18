@@ -1,22 +1,22 @@
 {
-  "name": "macos-actions",
+  "name": "macos-actions-certificate",
   "version": "0.1.0",
-  "description": "Focused GitHub Actions for macOS code signing and app bundle preparation.",
+  "description": "Import an Apple code-signing certificate into an isolated macOS keychain.",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm typecheck && ncc build certificate/src/index.ts -o certificate/dist --minify && ncc build certificate/src/post/index.ts -o certificate/dist/post --minify",
+    "build": "pnpm typecheck && ncc build src/index.ts -o dist --minify && ncc build src/post/index.ts -o dist/post --minify",
     "check": "pnpm format:check && pnpm typecheck && pnpm test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "node --test certificate/test/*.test.mts",
+    "test": "node --test test/*.test.mts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "github-actions",
     "macos",
     "code-signing",
-    "notarization"
+    "keychain"
   ],
   "author": "insd47",
   "license": "MIT",

@@ -43,6 +43,7 @@ precompiled `Assets.car` files will be added when it can be tested against real 
 ## Development
 
 ```bash
+cd certificate
 corepack enable
 pnpm install
 pnpm check

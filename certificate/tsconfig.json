@@ -10,5 +10,5 @@
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true
   },
-  "include": ["certificate/src/**/*.ts"]
+  "include": ["src/**/*.ts"]
 }
