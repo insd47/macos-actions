@@ -2,11 +2,12 @@
 
 A focused collection of GitHub Actions for preparing, signing, and notarizing macOS app bundles.
 
-| Action        | Purpose                                                                     |
-| ------------- | --------------------------------------------------------------------------- |
-| `certificate` | Imports a PKCS12 certificate into an isolated keychain for the current run. |
-| `icon`        | Replaces the `.icns` file referenced by the app's `CFBundleIconFile`.       |
-| `sign`        | Signs, notarizes, staples, and validates the app bundle.                    |
+| Action                | Purpose                                                                     |
+| --------------------- | --------------------------------------------------------------------------- |
+| `certificate`         | Imports a PKCS12 certificate into an isolated keychain for the current run. |
+| `icon`                | Replaces the `.icns` file referenced by the app's `CFBundleIconFile`.       |
+| [`profile`](profile/) | Prepares one downloaded provisioning profile and removes it after the job.  |
+| `sign`                | Signs, notarizes, staples, and validates the app bundle.                    |
 
 ## Usage
 
@@ -35,7 +36,7 @@ A focused collection of GitHub Actions for preparing, signing, and notarizing ma
     identity: ${{ steps.certificate.outputs.identity }}
 ```
 
-All three actions require a macOS runner. The `certificate` action uses the GitHub Actions Node.js 24 runtime.
+All actions require a macOS runner. The `certificate` and `profile` actions use the GitHub Actions Node.js 24 runtime.
 
 The `icon` action currently supports verified `.icns` replacement only. Support for Icon Composer `.icon` projects or
 precompiled `Assets.car` files will be added when it can be tested against real assets and a pinned Xcode toolchain.

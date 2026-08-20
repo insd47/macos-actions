@@ -1,0 +1,28 @@
+name: Prepare Apple Provisioning Profile
+description: Select one downloaded Apple provisioning profile, move it into place, and remove it after the job.
+author: insd47
+
+inputs:
+  profiles:
+    description: The JSON output from Apple-Actions/download-provisioning-profiles.
+    required: true
+  profile-type:
+    description: The expected App Store Connect provisioning profile type.
+    required: true
+  destination:
+    description: The path where the selected profile is required during the job.
+    required: true
+
+outputs:
+  path:
+    description: The absolute path of the prepared provisioning profile.
+
+runs:
+  using: node24
+  main: dist/index.js
+  post: dist/post/index.js
+  post-if: always()
+
+branding:
+  color: blue
+  icon: file
